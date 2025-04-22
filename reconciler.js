@@ -12,6 +12,10 @@ let state = { count: 0 };
 let currentCallback = null;
 let currentCallbackPriority = null;
 
+// 동기 콜백 큐와 상태 변수들
+let syncQueue = null;
+let immediateQueueCallbackNode = null;
+
 // 상태 업데이트 디스패치
 function dispatchAction(fiber, queue, action) {
   const isRenderPhase = isRendering();
@@ -100,19 +104,6 @@ function getNextPendingUpdate() {
   return earliest;
 }
 
-// 콜백 예약
-function scheduleCallback(priority, callback, delay = 0) {
-  console.log("콜백 예약:", { priority, delay });
-  const timeoutId = setTimeout(callback, delay);
-  return { priority, timeoutId };
-}
-
-// 콜백 취소
-function cancelCallback(callback) {
-  clearTimeout(callback.timeoutId);
-  console.log("콜백 취소:", callback);
-}
-
 // 스케줄 예약 (고도화)
 function ensureRootIsScheduled() {
   const nextUpdate = getNextPendingUpdate();
@@ -176,6 +167,61 @@ function computeExpirationTime(fiber, currentTime) {
   return currentTime + 50; // 50ms 뒤에 만료
 }
 
+// 동기 콜백 예약
+function scheduleSyncCallback(callback) {
+  console.log("동기 콜백 실행");
+
+  // 동기 콜백을 큐에 푸시
+  if (syncQueue === null) {
+    syncQueue = [callback];
+    // 큐를 다음 틱에서 플러시하도록 예약
+    immediateQueueCallbackNode = scheduleCallback(
+      ImmediatePriority,
+      flushSyncCallbackQueueImpl
+    );
+  } else {
+    // 이미 큐가 존재하면 콜백만 푸시
+    syncQueue.push(callback);
+  }
+
+  // 더미 콜백 반환
+  return { id: 'fakeCallbackNode' };  // 일단 약야깃ㄱ으로 구현
+}
+
+// 큐를 플러시하는 함수 (여기서 콜백을 실행)
+function flushSyncCallbackQueueImpl() {
+  console.log("동기 콜백 큐 플러시");
+
+  if (syncQueue !== null) {
+    while (syncQueue.length > 0) {
+      const callback = syncQueue.shift();
+      console.log("콜백 실행:", callback);
+      callback();
+    }
+    // 큐를 비움
+    syncQueue = null;
+  }
+
+  // 큐가 비워졌으면, 예약된 작업이 없다면 immediateQueueCallbackNode를 취소
+  if (immediateQueueCallbackNode) {
+    cancelCallback(immediateQueueCallbackNode);
+    immediateQueueCallbackNode = null;
+  }
+}
+
+// 예약된 콜백을 취소하는 함수
+function cancelCallback(callbackNode) {
+  console.log("콜백 취소:", callbackNode);
+}
+
+// Scheduler_ImmediatePriority는 1로 간주
+
+// scheduleCallback 구현
+function scheduleCallback(priority, callback, timeout) {
+  console.log("스케줄 콜백:", { priority });
+  return setTimeout(callback, timeout);  // 즉시 실행 (최단 시간 후)
+}
+
 // 테스트 코드
 const fiber = {};
 const queue = { last: null };
@@ -184,11 +230,6 @@ const queue = { last: null };
 dispatchAction(fiber, queue, (prev) => ({ count: prev.count + 1 }));
 dispatchAction(fiber, queue, (prev) => ({ count: prev.count + 1 }));
 
-// 동기 콜백
-scheduleSyncCallback(() => console.log("동기 콜백"));
-
-// 동기 콜백 예약
-function scheduleSyncCallback(callback) {
-  console.log("동기 콜백 실행");
-  callback();
-}
+// 콜백 예약
+scheduleSyncCallback(() => console.log("즉시 실행된 동기 콜백 1"));
+scheduleSyncCallback(() => console.log("즉시 실행된 동기 콜백 2"));
