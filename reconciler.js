@@ -128,13 +128,27 @@ function ensureRootIsScheduled() {
   }
 
   currentCallbackPriority = priority;
-  currentCallback = scheduleCallback(priority, () => {
-    currentCallback = null;
-    currentCallbackPriority = null;
-    performWork();
-  }, timeout);
-}
 
+  if (priority === ImmediatePriority || timeout === 0) {
+    console.log("동기 콜백으로 처리");
+    currentCallback = scheduleSyncCallback(() => {
+      currentCallback = null;
+      currentCallbackPriority = null;
+      performWork();
+    });
+  } else {
+    console.log("비동기 콜백으로 처리");
+    currentCallback = scheduleCallback(
+      priority,
+      () => {
+        currentCallback = null;
+        currentCallbackPriority = null;
+        performWork();
+      },
+      timeout
+    );
+  }
+}
 // 실제 작업 처리
 function performWork() {
   console.log("performWork 실행");
@@ -185,7 +199,7 @@ function scheduleSyncCallback(callback) {
   }
 
   // 더미 콜백 반환
-  return { id: 'fakeCallbackNode' };  // 일단 약야깃ㄱ으로 구현
+  return { id: "fakeCallbackNode" }; // 일단 약야깃ㄱ으로 구현
 }
 
 // 큐를 플러시하는 함수 (여기서 콜백을 실행)
@@ -219,17 +233,17 @@ function cancelCallback(callbackNode) {
 // scheduleCallback 구현
 function scheduleCallback(priority, callback, timeout) {
   console.log("스케줄 콜백:", { priority });
-  return setTimeout(callback, timeout);  // 즉시 실행 (최단 시간 후)
+  return setTimeout(callback, timeout); // 즉시 실행 (최단 시간 후)
 }
 
 // 테스트 코드
 const fiber = {};
 const queue = { last: null };
 
-// 상태 업데이트 디스패치
-dispatchAction(fiber, queue, (prev) => ({ count: prev.count + 1 }));
+// 비동기
 dispatchAction(fiber, queue, (prev) => ({ count: prev.count + 1 }));
 
-// 콜백 예약
-scheduleSyncCallback(() => console.log("즉시 실행된 동기 콜백 1"));
-scheduleSyncCallback(() => console.log("즉시 실행된 동기 콜백 2"));
+//동기
+setTimeout(() => {
+  dispatchAction(fiber, queue, (prev) => ({ count: prev.count + 1 }));
+}, 0);
